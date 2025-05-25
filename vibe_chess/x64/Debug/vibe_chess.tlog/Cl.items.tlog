@@ -1,3 +1,5 @@
-C:\Users\arslaz\source\repos\vibe_chess\main.cpp;C:\Users\arslaz\source\repos\vibe_chess\vibe_chess\x64\Debug\main.obj
-C:\Users\arslaz\source\repos\vibe_chess\menu.cpp;C:\Users\arslaz\source\repos\vibe_chess\vibe_chess\x64\Debug\menu.obj
-C:\Users\arslaz\source\repos\vibe_chess\Startscreen.cpp;C:\Users\arslaz\source\repos\vibe_chess\vibe_chess\x64\Debug\Startscreen.obj
+C:\Users\arslaz\source\repos\vibe-chess\Button.cpp;C:\Users\arslaz\source\repos\vibe-chess\vibe_chess\x64\Debug\Button.obj
+C:\Users\arslaz\source\repos\vibe-chess\main.cpp;C:\Users\arslaz\source\repos\vibe-chess\vibe_chess\x64\Debug\main.obj
+C:\Users\arslaz\source\repos\vibe-chess\menu.cpp;C:\Users\arslaz\source\repos\vibe-chess\vibe_chess\x64\Debug\menu.obj
+C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp;C:\Users\arslaz\source\repos\vibe-chess\vibe_chess\x64\Debug\NewGame.obj
+C:\Users\arslaz\source\repos\vibe-chess\settings.cpp;C:\Users\arslaz\source\repos\vibe-chess\vibe_chess\x64\Debug\settings.obj

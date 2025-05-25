@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include=".h">
+      <UniqueIdentifier>{621540c8-22f5-4b4d-a174-cabb82820cad}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -21,7 +24,13 @@
     <ClCompile Include="menu.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="Startscreen.cpp">
+    <ClCompile Include="Button.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="NewGame.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="settings.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
@@ -37,13 +46,20 @@
     <None Include="sfml-system-d-2.dll" />
     <None Include="sfml-window-2.dll" />
     <None Include="sfml-window-d-2.dll" />
+    <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="menu.h">
-      <Filter>Исходные файлы</Filter>
+      <Filter>.h</Filter>
     </ClInclude>
-    <ClInclude Include="Startscreen.h">
-      <Filter>Исходные файлы</Filter>
+    <ClInclude Include="Button.h">
+      <Filter>.h</Filter>
+    </ClInclude>
+    <ClInclude Include="NewGame.h">
+      <Filter>.h</Filter>
+    </ClInclude>
+    <ClInclude Include="settings.h">
+      <Filter>.h</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>
