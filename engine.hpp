@@ -13,6 +13,7 @@ private:
     HANDLE hChildStd_OUT_Wr = NULL;
     PROCESS_INFORMATION piProcInfo;
     bool engineReady = false;
+    int difficultyLevel;
 
 public:
     ChessEngine() = default;
@@ -80,7 +81,12 @@ public:
 
         return true;
     }
+    void setDifficulty(int level) {
+        difficultyLevel = level;
 
+        SendCommand("setoption name Skill Level value " + std::to_string(difficultyLevel));
+
+    }
     void SendCommand(const std::string& command) {
         if (!engineReady) return;
 
@@ -132,6 +138,7 @@ public:
         }
         return "";
     }
+
 
     void CloseConnection() {
         engineReady = false;

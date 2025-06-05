@@ -3,10 +3,10 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <iostream>
-#include <vector>
 
 const int TILE_SIZE = 100;
 const sf::Vector2f BOARD_POSITION(560, 140);
+const int MAX_PIECES = 32; // ћаксимальное количество фигур (16 белых + 16 черных)
 
 int getTextureIndex(int piece) {
     switch (abs(piece)) {
@@ -34,8 +34,8 @@ struct PieceSprite {
     bool alive = true;
 };
 
-void updatePieceSprites(std::vector<PieceSprite>& pieces, int boardLayout[8][8], sf::Texture& tex) {
-    pieces.clear();
+void updatePieceSprites(PieceSprite pieces[], int& pieceCount, int boardLayout[8][8], sf::Texture& tex) {
+    pieceCount = 0;
     for (int y = 0; y < 8; ++y) {
         for (int x = 0; x < 8; ++x) {
             int piece = boardLayout[y][x];
@@ -57,15 +57,15 @@ void updatePieceSprites(std::vector<PieceSprite>& pieces, int boardLayout[8][8],
             );
 
             ps.alive = true;
-            pieces.push_back(ps);
+            pieces[pieceCount++] = ps;
         }
     }
 }
 
-int findPieceIndex(std::vector<PieceSprite>& pieces, int x, int y) {
-    for (size_t i = 0; i < pieces.size(); ++i) {
+int findPieceIndex(PieceSprite pieces[], int pieceCount, int x, int y) {
+    for (int i = 0; i < pieceCount; ++i) {
         if (pieces[i].x == x && pieces[i].y == y && pieces[i].alive)
-            return (int)i;
+            return i;
     }
     return -1;
 }
@@ -74,7 +74,7 @@ bool applyMove(int layout[8][8], const std::string& move) {
     if (move.length() < 4) return false;
 
     int fromX = move[0] - 'a';
-    int fromY = 7 - (move[1] - '1'); // Convert to 0-based index
+    int fromY = 7 - (move[1] - '1');
     int toX = move[2] - 'a';
     int toY = 7 - (move[3] - '1');
 
@@ -87,7 +87,7 @@ bool applyMove(int layout[8][8], const std::string& move) {
 }
 
 void makeBotMove(ChessEngine& engine, int layout[8][8], std::string& moveHistory,
-    std::vector<PieceSprite>& pieces, sf::Texture& pieceTex,
+    PieceSprite pieces[], int& pieceCount, sf::Texture& pieceTex,
     const ChessGameSettings& settings) {
     std::cout << "Requesting bot move..." << std::endl;
     engine.SendCommand("go depth " + std::to_string(settings.engineDepth));
@@ -101,7 +101,7 @@ void makeBotMove(ChessEngine& engine, int layout[8][8], std::string& moveHistory
 
         if (applyMove(layout, botMove)) {
             moveHistory += (moveHistory.empty() ? "" : " ") + botMove;
-            updatePieceSprites(pieces, layout, pieceTex);
+            updatePieceSprites(pieces, pieceCount, layout, pieceTex);
             if (settings.moveSound) settings.moveSound->play();
             std::cout << "Bot move applied successfully" << std::endl;
         }
@@ -114,13 +114,13 @@ void makeBotMove(ChessEngine& engine, int layout[8][8], std::string& moveHistory
     }
 }
 
-void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings) {
+void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, int levell) {
     ChessEngine engine;
     if (!engine.ConnectToEngine(L"stockfish.exe")) {
         std::cerr << "Failed to start Stockfish!\n";
         return;
     }
-
+    engine.setDifficulty(levell);
     // Initialize textures
     sf::Texture boardTex, pieceTex, backTex;
     if (!boardTex.loadFromFile("PNGs/ChessBoard.png") ||
@@ -134,7 +134,7 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings) {
     board.setPosition(BOARD_POSITION);
 
     sf::Sprite backButton(backTex);
-    backButton.setScale(0.25f, 0.25f);
+    backButton.setScale(0.10f, 0.10f);
     backButton.setPosition(20, 20);
 
     // Initial board setup
@@ -151,8 +151,9 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings) {
 
     bool isWhiteTurn = true;
     std::string moveHistory;
-    std::vector<PieceSprite> pieces;
-    updatePieceSprites(pieces, layout, pieceTex);
+    PieceSprite pieces[MAX_PIECES];
+    int pieceCount = 0;
+    updatePieceSprites(pieces, pieceCount, layout, pieceTex);
 
     // Dragging variables
     int dragFromX = -1, dragFromY = -1;
@@ -174,7 +175,7 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings) {
             bool nowHover = backButton.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
             if (nowHover != hoverBack) {
                 hoverBack = nowHover;
-                backButton.setScale(hoverBack ? 0.3f : 0.25f, hoverBack ? 0.3f : 0.25f);
+                backButton.setScale(hoverBack ? 0.15f : 0.10f, hoverBack ? 0.15f : 0.10f);
                 if (hoverBack && settings.moveSound) settings.moveSound->play();
             }
 
@@ -193,7 +194,7 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings) {
                     if ((isWhiteTurn && piece > 0) || (!isWhiteTurn && piece < 0)) {
                         dragFromX = boardX;
                         dragFromY = boardY;
-                        dragPieceIndex = findPieceIndex(pieces, boardX, boardY);
+                        dragPieceIndex = findPieceIndex(pieces, pieceCount, boardX, boardY);
 
                         if (dragPieceIndex != -1) {
                             dragging = true;
@@ -237,12 +238,12 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings) {
                             validMove = true;
                             isWhiteTurn = !isWhiteTurn;
 
-                            updatePieceSprites(pieces, layout, pieceTex);
+                            updatePieceSprites(pieces, pieceCount, layout, pieceTex);
                             if (settings.moveSound) settings.moveSound->play();
 
                             // Bot move
                             if (!isWhiteTurn) {
-                                makeBotMove(engine, layout, moveHistory, pieces, pieceTex, settings);
+                                makeBotMove(engine, layout, moveHistory, pieces, pieceCount, pieceTex, settings);
                                 isWhiteTurn = true;
                             }
                         }
@@ -268,9 +269,9 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings) {
         window.clear(sf::Color(50, 50, 50));
         window.draw(board);
 
-        for (const auto& piece : pieces) {
-            if (piece.alive) {
-                window.draw(piece.sprite);
+        for (int i = 0; i < pieceCount; ++i) {
+            if (pieces[i].alive) {
+                window.draw(pieces[i].sprite);
             }
         }
 

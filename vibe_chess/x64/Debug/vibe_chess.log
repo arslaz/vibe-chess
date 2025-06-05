@@ -1,16 +1,7 @@
-﻿  chess_game.cpp
-C:\Users\arslaz\source\repos\vibe-chess\engine.hpp(89,57): warning C4267: аргумент: преобразование из "size_t" в "DWORD"; возможна потеря данных
+﻿  NewGame.cpp
+  chess_game.cpp
+C:\Users\arslaz\source\repos\vibe-chess\engine.hpp(95,57): warning C4267: аргумент: преобразование из "size_t" в "DWORD"; возможна потеря данных
   (компиляция исходного файла "chess_game.cpp")
   
-  NewGame.cpp
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244: аргумент: преобразование "T" в "T", возможна потеря данных
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244:         with
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244:         [
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244:             T=unsigned int
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244:         ]
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244:         and
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244:         [
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244:             T=float
-C:\Users\arslaz\source\repos\vibe-chess\NewGame.cpp(24,45): warning C4244:         ]
   Создание кода...
   vibe_chess.vcxproj -> C:\Users\arslaz\Source\Repos\vibe-chess\x64\Debug\vibe_chess.exe

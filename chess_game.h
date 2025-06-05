@@ -11,4 +11,4 @@ struct ChessGameSettings {
     int engineDepth = 10; // уровень сложности
 };
 
-void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings);
+void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, int levell);

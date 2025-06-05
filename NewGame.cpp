@@ -18,26 +18,34 @@ void openNewGame(sf::RenderWindow& window, float musicVolume, float soundVolume)
     hoverSound.setVolume(soundVolume);
     clickSound.setVolume(soundVolume);
 
-    // Создание кнопки "Игра с ботом"
-    Button botGameBtn;
-    botGameBtn.setup(font, "Game with bot",
-        sf::Vector2f(window.getSize().x / 2 - 150, 300),
-        sf::Vector2f(300, 60),
-        &hoverSound, &clickSound);
+    // Создание трех кнопок "Игра с ботом"
+    const int buttonCount = 3;
+    Button botGameBtns[buttonCount];
+    const float buttonWidth = 300.f;
+    const float buttonHeight = 60.f;
+    const float startY = 250.f;
+    const float spacing = 80.f; // Расстояние между кнопками
+
+    for (int i = 0; i < buttonCount; i++) {
+        botGameBtns[i].setup(font, "Game with bot " + std::to_string(i + 1),
+            sf::Vector2f(window.getSize().x / 2 - buttonWidth / 2, startY + i * (buttonHeight + spacing)),
+            sf::Vector2f(buttonWidth, buttonHeight),
+            &hoverSound, &clickSound);
+    }
 
     // Настройка кнопки "Назад"
     sf::Texture backTexture;
     if (!backTexture.loadFromFile("image/back.png")) return;
 
     sf::Sprite backButton(backTexture);
-    const float backButtonSize = 50.f; // Фиксированный размер 50x50
+    const float backButtonSize = 50.f;
     float scale = backButtonSize / std::max(backTexture.getSize().x, backTexture.getSize().y);
     backButton.setScale(scale, scale);
     backButton.setPosition(20, 20);
 
     const float originalScale = scale;
     const float hoverScale = originalScale * 1.1f;
-    bool backWasHovered = false; // Флаг для отслеживания наведения
+    bool backWasHovered = false;
 
     // Основной цикл
     while (window.isOpen()) {
@@ -56,36 +64,47 @@ void openNewGame(sf::RenderWindow& window, float musicVolume, float soundVolume)
 
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window));
 
+        // Обновление кнопок "Игра с ботом"
+        for (int i = 0; i < buttonCount; i++) {
+            botGameBtns[i].update(mousePos);
+            if (botGameBtns[i].isClicked(mousePos, mousePressed)) {
+                clickSound.play();
 
-        botGameBtn.update(mousePos);
-        if (botGameBtn.isClicked(mousePos, mousePressed)) {
-            // Здесь будет логика запуска игры с ботом
-            clickSound.play();
+                sf::SoundBuffer moveBuffer;
+                static sf::Sound moveSound(moveBuffer);
 
-            sf::SoundBuffer moveBuffer;
+                ChessGameSettings settings;
+                settings.soundVolume = soundVolume;
+                settings.musicVolume = musicVolume;
+                settings.engineDepth = 10;
+                settings.moveSound = &moveSound;
+                int levell;
+                if (i == 1) {
+                    levell = 3;
+                }
+                else if (i == 2) {
+                    levell = 10;
+                }
+                else {
+                    levell = 20;
+                }
 
-            static sf::Sound moveSound(moveBuffer);
-
-            ChessGameSettings settings;
-            settings.soundVolume = soundVolume;
-            settings.musicVolume = musicVolume;
-            settings.engineDepth = 10;
-            settings.moveSound = &moveSound;
-
-            runChessGame(window, settings);
-            window.setTitle("Vibe Chess");
+                int level = i + 1; // Уровень сложности в зависимости от номера кнопки (1, 2, 3)
+                runChessGame(window, settings, levell);
+                window.setTitle("Vibe Chess");
+            }
         }
 
-
+        // Обновление кнопки "Назад"
         bool backHovered = backButton.getGlobalBounds().contains(mousePos);
         if (backHovered) {
             backButton.setScale(hoverScale, hoverScale);
-            if (!backWasHovered) { 
+            if (!backWasHovered) {
                 hoverSound.play();
             }
             if (mousePressed) {
                 clickSound.play();
-                return; 
+                return;
             }
         }
         else {
@@ -94,9 +113,14 @@ void openNewGame(sf::RenderWindow& window, float musicVolume, float soundVolume)
         backWasHovered = backHovered;
 
         // Отрисовка
-        window.clear(sf::Color(30, 30, 30)); // Серый фон
+        window.clear(sf::Color(30, 30, 30));
+
+        // Рисуем все кнопки
+        for (int i = 0; i < buttonCount; i++) {
+            botGameBtns[i].draw(window);
+        }
+
         window.draw(backButton);
-        botGameBtn.draw(window);
         window.display();
     }
 }
