@@ -1,5 +1,6 @@
 #include "NewGame.h"
 #include "Button.h"
+#include "chess_game.h"
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <algorithm>
@@ -59,6 +60,20 @@ void openNewGame(sf::RenderWindow& window, float musicVolume, float soundVolume)
         botGameBtn.update(mousePos);
         if (botGameBtn.isClicked(mousePos, mousePressed)) {
             // Здесь будет логика запуска игры с ботом
+            clickSound.play();
+
+            sf::SoundBuffer moveBuffer;
+
+            static sf::Sound moveSound(moveBuffer);
+
+            ChessGameSettings settings;
+            settings.soundVolume = soundVolume;
+            settings.musicVolume = musicVolume;
+            settings.engineDepth = 10;
+            settings.moveSound = &moveSound;
+
+            runChessGame(window, settings);
+            window.setTitle("Vibe Chess");
         }
 
 
