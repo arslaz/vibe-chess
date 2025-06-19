@@ -3,10 +3,58 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <iostream>
+#include <fstream>
 
 const int TILE_SIZE = 100;
 const sf::Vector2f BOARD_POSITION(560, 140);
-const int MAX_PIECES = 32; // ћаксимальное количество фигур (16 белых + 16 черных)
+const int MAX_PIECES = 32;
+const std::string HISTORY_FILE = "chess_history.txt";
+
+// Sound effects structure
+struct GameSounds {
+    sf::SoundBuffer moveBuffer;
+    sf::SoundBuffer captureBuffer;
+    sf::Sound moveSound;
+    sf::Sound captureSound;
+
+    bool loadSounds() {
+        if (!moveBuffer.loadFromFile("sound/move.wav") ||
+            !captureBuffer.loadFromFile("sound/capture.wav")) {
+            std::cerr << "Failed to load sound effects\n";
+            return false;
+        }
+
+        moveSound.setBuffer(moveBuffer);
+        captureSound.setBuffer(captureBuffer);
+        return true;
+    }
+};
+
+// Function to write game result to history file
+void writeGameHistory(const std::string& result, const std::string& moves) {
+    std::ofstream file(HISTORY_FILE, std::ios::app);
+    if (!file) {
+        std::cerr << "Failed to open history file\n";
+        return;
+    }
+
+    // —читаем количество уже существующих игр
+    int gameCount = 0;
+    {
+        std::ifstream inFile(HISTORY_FILE);
+        std::string line;
+        while (std::getline(inFile, line)) {
+            if (line.find("Game #") != std::string::npos) {
+                gameCount++;
+            }
+        }
+    }
+
+    // «аписываем новую игру без даты
+    file << "Game #" << (gameCount + 1)
+        << " | Result: " << result << "\n"
+        << "Moves: " << moves << "\n\n";
+}
 
 int getTextureIndex(int piece) {
     switch (abs(piece)) {
@@ -70,7 +118,7 @@ int findPieceIndex(PieceSprite pieces[], int pieceCount, int x, int y) {
     return -1;
 }
 
-bool applyMove(int layout[8][8], const std::string& move) {
+bool applyMove(int layout[8][8], const std::string& move, GameSounds& sounds) {
     if (move.length() < 4) return false;
 
     int fromX = move[0] - 'a';
@@ -81,14 +129,24 @@ bool applyMove(int layout[8][8], const std::string& move) {
     if (!isValidCoordinate(fromX, fromY) || !isValidCoordinate(toX, toY))
         return false;
 
+    bool isCapture = (layout[toY][toX] != 0);
     layout[toY][toX] = layout[fromY][fromX];
     layout[fromY][fromX] = 0;
+
+    // Play appropriate sound
+    if (isCapture) {
+        sounds.captureSound.play();
+    }
+    else {
+        sounds.moveSound.play();
+    }
+
     return true;
 }
 
 void makeBotMove(ChessEngine& engine, int layout[8][8], std::string& moveHistory,
     PieceSprite pieces[], int& pieceCount, sf::Texture& pieceTex,
-    const ChessGameSettings& settings) {
+    const ChessGameSettings& settings, GameSounds& sounds) {
     std::cout << "Requesting bot move..." << std::endl;
     engine.SendCommand("go depth " + std::to_string(settings.engineDepth));
     std::string botResponse = engine.GetResponse(10000);
@@ -99,10 +157,9 @@ void makeBotMove(ChessEngine& engine, int layout[8][8], std::string& moveHistory
         std::string botMove = botResponse.substr(bestMovePos + 9, 4);
         std::cout << "Parsed bot move: " << botMove << std::endl;
 
-        if (applyMove(layout, botMove)) {
+        if (applyMove(layout, botMove, sounds)) {
             moveHistory += (moveHistory.empty() ? "" : " ") + botMove;
             updatePieceSprites(pieces, pieceCount, layout, pieceTex);
-            if (settings.moveSound) settings.moveSound->play();
             std::cout << "Bot move applied successfully" << std::endl;
         }
         else {
@@ -114,13 +171,53 @@ void makeBotMove(ChessEngine& engine, int layout[8][8], std::string& moveHistory
     }
 }
 
-void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, int levell) {
+void showGameResult(sf::RenderWindow& window, const std::string& result, const std::string& moves) {
+    writeGameHistory(result, moves);
+
+    sf::Font font;
+    if (!font.loadFromFile("image/arial.ttf")) {
+        std::cerr << "Failed to load font for result display\n";
+        return;
+    }
+
+    sf::Text resultText(result, font, 50);
+    resultText.setFillColor(sf::Color::White);
+    resultText.setPosition(400, 300);
+
+    sf::Text hintText("Press ESC to continue", font, 20);
+    hintText.setFillColor(sf::Color(200, 200, 200));
+    hintText.setPosition(450, 400);
+
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event)) {
+            if (event.type == sf::Event::Closed ||
+                (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)) {
+                return;
+            }
+        }
+
+        window.clear(sf::Color(30, 30, 30));
+        window.draw(resultText);
+        window.draw(hintText);
+        window.display();
+    }
+}
+
+void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, int level) {
+    // Initialize sounds
+    GameSounds sounds;
+    if (!sounds.loadSounds()) {
+        std::cerr << "Some sound effects will be missing\n";
+    }
+
     ChessEngine engine;
     if (!engine.ConnectToEngine(L"stockfish.exe")) {
         std::cerr << "Failed to start Stockfish!\n";
         return;
     }
-    engine.setDifficulty(levell);
+    engine.setDifficulty(level);
+
     // Initialize textures
     sf::Texture boardTex, pieceTex, backTex;
     if (!boardTex.loadFromFile("PNGs/ChessBoard.png") ||
@@ -234,17 +331,58 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
                         std::string response = engine.GetResponse(5000);
 
                         if (response.find("readyok") != std::string::npos) {
+                            // Play sound for the move
+                            if (capturedPiece != 0) {
+                                sounds.captureSound.play();
+                            }
+                            else {
+                                sounds.moveSound.play();
+                            }
+
                             moveHistory = newHistory;
                             validMove = true;
                             isWhiteTurn = !isWhiteTurn;
 
                             updatePieceSprites(pieces, pieceCount, layout, pieceTex);
-                            if (settings.moveSound) settings.moveSound->play();
+
+                            // Check for game end conditions
+                            engine.SendCommand("position startpos moves " + moveHistory);
+                            engine.SendCommand("go depth 1");
+                            std::string gameStateResponse = engine.GetResponse(1000);
+
+                            if (gameStateResponse.find("mate") != std::string::npos) {
+                                std::string winner = isWhiteTurn ? "Black" : "White";
+                                showGameResult(window, winner + " wins by checkmate!", moveHistory);
+                                engine.SafeClose();
+                                return;
+                            }
+                            else if (gameStateResponse.find("stalemate") != std::string::npos) {
+                                showGameResult(window, "Draw by stalemate!", moveHistory);
+                                engine.SafeClose();
+                                return;
+                            }
 
                             // Bot move
                             if (!isWhiteTurn) {
-                                makeBotMove(engine, layout, moveHistory, pieces, pieceCount, pieceTex, settings);
+                                makeBotMove(engine, layout, moveHistory, pieces, pieceCount, pieceTex, settings, sounds);
                                 isWhiteTurn = true;
+
+                                // Check again for game end after bot move
+                                engine.SendCommand("position startpos moves " + moveHistory);
+                                engine.SendCommand("go depth 1");
+                                gameStateResponse = engine.GetResponse(1000);
+
+                                if (gameStateResponse.find("mate") != std::string::npos) {
+                                    std::string winner = isWhiteTurn ? "Black" : "White";
+                                    showGameResult(window, winner + " wins by checkmate!", moveHistory);
+                                    engine.SafeClose();
+                                    return;
+                                }
+                                else if (gameStateResponse.find("stalemate") != std::string::npos) {
+                                    showGameResult(window, "Draw by stalemate!", moveHistory);
+                                    engine.SafeClose();
+                                    return;
+                                }
                             }
                         }
                         else {
@@ -262,6 +400,11 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
                 dragging = false;
                 dragFromX = dragFromY = -1;
                 dragPieceIndex = -1;
+            }
+
+            // Show history when H key is pressed
+            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::H) {
+                showGameResult(window, "Game History", moveHistory);
             }
         }
 
