@@ -4,6 +4,8 @@
 #include "Button.h"
 #include <SFML/Audio.hpp>
 #include <fstream>
+#include "History.h"
+
 
 void startGame(sf::RenderWindow& window) {
     sf::Font font;
@@ -50,7 +52,7 @@ void startGame(sf::RenderWindow& window) {
 
 
     Button buttons[4];
-    const std::string labels[4] = { "New Game", "History", "Settings", "Exit" };
+    const std::wstring labels[4] = { L"Новая игра", L"История", L"Настройки", L"Выйти" };
 
     for (int i = 0; i < 4; ++i) {
         buttons[i].setup(font, labels[i],
@@ -79,22 +81,26 @@ void startGame(sf::RenderWindow& window) {
             buttons[i].update(mousePos);
 
             if (buttons[i].isClicked(mousePos, mousePressed)) {
-                if (labels[i] == "New Game") {
+                if (labels[i] == L"Новая игра") {
                     clickSound.play();
-                    window.clear(sf::Color(30, 30, 30)); 
+                    window.clear(sf::Color(30, 30, 30));
                     openNewGame(window, bgMusic.getVolume(), soundVolume);
 
                     hoverSound.setVolume(soundVolume);
                     clickSound.setVolume(soundVolume);
-                    continue; 
+                    continue;
                 }
-                else if (labels[i] == "Settings") {
+                else if (labels[i] == L"Настройки") {
                     openSettings(window, bgMusic, hoverSound, clickSound);
 
                     hoverSound.setVolume(soundVolume);
                     clickSound.setVolume(soundVolume);
                 }
-                else if (labels[i] == "Exit") {
+                else if (labels[i] == L"История") {
+                    clickSound.play();
+                    openHistory(window, soundVolume); // Передаем только громкость звука
+                }
+                else if (labels[i] == L"Выйти") {
                     window.close();
                 }
             }

@@ -27,10 +27,25 @@ void openNewGame(sf::RenderWindow& window, float musicVolume, float soundVolume)
     const float spacing = 80.f;
 
     for (int i = 0; i < buttonCount; i++) {
-        botGameBtns[i].setup(font, "Game with bot " + std::to_string(i + 1),
+        if (i == 0) {
+            botGameBtns[i].setup(font, L"Легко",
             sf::Vector2f(window.getSize().x / 2 - buttonWidth / 2, startY + i * (buttonHeight + spacing)),
             sf::Vector2f(buttonWidth, buttonHeight),
             &hoverSound, &clickSound);
+        }
+        else if (i == 1) {
+            botGameBtns[i].setup(font, L"Сложно",
+                sf::Vector2f(window.getSize().x / 2 - buttonWidth / 2, startY + i * (buttonHeight + spacing)),
+                sf::Vector2f(buttonWidth, buttonHeight),
+                &hoverSound, &clickSound);
+        }
+        else {
+            botGameBtns[i].setup(font, L"Невозможно",
+                sf::Vector2f(window.getSize().x / 2 - buttonWidth / 2, startY + i * (buttonHeight + spacing)),
+                sf::Vector2f(buttonWidth, buttonHeight),
+                &hoverSound, &clickSound);
+        }
+        
     }
 
 
@@ -80,7 +95,7 @@ void openNewGame(sf::RenderWindow& window, float musicVolume, float soundVolume)
                 settings.moveSound = &moveSound;
                 int levell;
                 if (i == 1) {
-                    levell = 3;
+                    levell = 0;
                 }
                 else if (i == 2) {
                     levell = 10;

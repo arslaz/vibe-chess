@@ -36,6 +36,9 @@
     <ClCompile Include="chess_game.cpp">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="History.cpp">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="openal32.dll" />
@@ -68,6 +71,9 @@
       <Filter>Исходные файлы</Filter>
     </ClInclude>
     <ClInclude Include="chess_game.h">
+      <Filter>.h</Filter>
+    </ClInclude>
+    <ClInclude Include="History.h">
       <Filter>.h</Filter>
     </ClInclude>
   </ItemGroup>

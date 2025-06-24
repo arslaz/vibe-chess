@@ -3,14 +3,17 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <iostream>
+#include <cstring>
 #include <fstream>
+#include <algorithm>
 
 const int TILE_SIZE = 100;
 const sf::Vector2f BOARD_POSITION(560, 140);
 const int MAX_PIECES = 32;
-const std::string HISTORY_FILE = "chess_history.txt";
+const std::string LOG_FILENAME = "chess_results.txt";
+const std::string PLAYER_NAME = "Player";
+const std::string BOT_NAME = "Stockfish";
 
-// Sound effects structure
 struct GameSounds {
     sf::SoundBuffer moveBuffer;
     sf::SoundBuffer captureBuffer;
@@ -18,43 +21,179 @@ struct GameSounds {
     sf::Sound captureSound;
 
     bool loadSounds() {
-        if (!moveBuffer.loadFromFile("sound/move.wav") ||
-            !captureBuffer.loadFromFile("sound/capture.wav")) {
-            std::cerr << "Failed to load sound effects\n";
+        if (!moveBuffer.loadFromFile("sound/click.wav") ||
+            !captureBuffer.loadFromFile("sound/hover.mp3")) {
+            std::cerr << "Failed to load sound files\n";
             return false;
         }
-
         moveSound.setBuffer(moveBuffer);
         captureSound.setBuffer(captureBuffer);
         return true;
     }
 };
 
-// Function to write game result to history file
-void writeGameHistory(const std::string& result, const std::string& moves) {
-    std::ofstream file(HISTORY_FILE, std::ios::app);
-    if (!file) {
-        std::cerr << "Failed to open history file\n";
-        return;
-    }
+struct PromotionWindow {
+    sf::RectangleShape background;
+    sf::Text title;
+    sf::RectangleShape pieces[4];
+    sf::Sprite pieceSprites[4];
+    bool visible = false;
+    int selectedPiece = 0;
+    sf::Vector2i promotionPos;
 
-    // Считаем количество уже существующих игр
-    int gameCount = 0;
-    {
-        std::ifstream inFile(HISTORY_FILE);
-        std::string line;
-        while (std::getline(inFile, line)) {
-            if (line.find("Game #") != std::string::npos) {
-                gameCount++;
-            }
+    PromotionWindow(sf::Font& font, sf::Texture& pieceTex) {
+        background.setSize(sf::Vector2f(400, 200));
+        background.setFillColor(sf::Color(50, 50, 50, 220));
+        background.setOutlineThickness(3);
+        background.setOutlineColor(sf::Color(200, 170, 50));
+
+        title.setFont(font);
+        title.setString(L"Выберите фигуру:");
+        title.setCharacterSize(30);
+        title.setFillColor(sf::Color::White);
+        title.setStyle(sf::Text::Bold);
+
+        for (int i = 0; i < 4; ++i) {
+            pieces[i].setSize(sf::Vector2f(80, 80));
+            pieces[i].setFillColor(sf::Color(70, 70, 70));
+            pieces[i].setOutlineThickness(2);
+            pieces[i].setOutlineColor(sf::Color(200, 170, 50));
+
+            pieceSprites[i].setTexture(pieceTex);
+            int type = (i == 0) ? 3 : (i == 1) ? 1 : (i == 2) ? 2 : 0;
+            pieceSprites[i].setTextureRect(sf::IntRect(type * TILE_SIZE, 0, TILE_SIZE, TILE_SIZE));
+            pieceSprites[i].setOrigin(TILE_SIZE / 2.f, TILE_SIZE / 2.f);
         }
     }
 
-    // Записываем новую игру без даты
-    file << "Game #" << (gameCount + 1)
-        << " | Result: " << result << "\n"
-        << "Moves: " << moves << "\n\n";
-}
+    void setPosition(int x, int y, bool isWhite) {
+        promotionPos = sf::Vector2i(x, y);
+        background.setPosition(x - 200, y - 100);
+        title.setPosition(x - 190, y - 80);
+
+        for (int i = 0; i < 4; ++i) {
+            pieces[i].setPosition(x - 150 + i * 100, y);
+            pieceSprites[i].setPosition(x - 110 + i * 100, y + 40);
+            pieceSprites[i].setTextureRect(sf::IntRect(
+                (i == 0) ? 3 : (i == 1) ? 1 : (i == 2) ? 2 : 0,
+                isWhite ? 0 : 1,
+                TILE_SIZE, TILE_SIZE
+            ));
+        }
+    }
+
+    void draw(sf::RenderWindow& window) {
+        if (!visible) return;
+        window.draw(background);
+        window.draw(title);
+        for (int i = 0; i < 4; ++i) {
+            window.draw(pieces[i]);
+            window.draw(pieceSprites[i]);
+        }
+    }
+
+    bool handleEvent(sf::Event& event, sf::RenderWindow& window) {
+        if (!visible) return false;
+        sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+        for (int i = 0; i < 4; ++i) {
+            if (pieces[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+                if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+                    selectedPiece = (i == 0) ? 5 : (i == 1) ? 2 : (i == 2) ? 3 : 4;
+                    visible = false;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+};
+
+struct GameOverScreen {
+    sf::RectangleShape background;
+    sf::Text message;
+    sf::RectangleShape menuButton;
+    sf::Text menuButtonText;
+    sf::RectangleShape restartButton;
+    sf::Text restartButtonText;
+    bool visible = false;
+    bool isWhiteWinner = false;
+
+    GameOverScreen(sf::Font& font) {
+        background.setSize(sf::Vector2f(600, 300));
+        background.setFillColor(sf::Color(30, 30, 30, 220));
+        background.setOutlineThickness(3);
+        background.setOutlineColor(sf::Color(200, 170, 50));
+        background.setPosition((1920 - 600) / 2, (1080 - 300) / 2);
+
+        message.setFont(font);
+        message.setCharacterSize(50);
+        message.setFillColor(sf::Color::White);
+        message.setStyle(sf::Text::Bold);
+
+        menuButton.setSize(sf::Vector2f(250, 60));
+        menuButton.setFillColor(sf::Color(100, 100, 70));
+        menuButton.setOutlineThickness(2);
+        menuButton.setOutlineColor(sf::Color(100, 100, 100));
+
+        menuButtonText.setFont(font);
+        menuButtonText.setString(L"Главное меню");
+        menuButtonText.setCharacterSize(30);
+        menuButtonText.setFillColor(sf::Color::White);
+
+        restartButton.setSize(sf::Vector2f(250, 60));
+        restartButton.setFillColor(sf::Color(100, 100, 100));
+        restartButton.setOutlineThickness(2);
+        restartButton.setOutlineColor(sf::Color(100, 100, 100));
+
+        restartButtonText.setFont(font);
+        restartButtonText.setString(L"Заново");
+        restartButtonText.setCharacterSize(30);
+        restartButtonText.setFillColor(sf::Color::White);
+
+        updatePositions();
+    }
+
+    void setWinner(bool whiteWon) {
+        isWhiteWinner = whiteWon;
+        message.setString(whiteWon ? L"Белые выиграли!" : L"Черные выиграли!");
+        updatePositions();
+    }
+
+    void updatePositions() {
+        sf::FloatRect textRect = message.getLocalBounds();
+        message.setOrigin(textRect.left + textRect.width / 2.0f,
+            textRect.top + textRect.height / 2.0f);
+        message.setPosition(background.getPosition().x + background.getSize().x / 2,
+            background.getPosition().y + 80);
+
+        float buttonY = background.getPosition().y + 180;
+        float centerX = background.getPosition().x + background.getSize().x / 2;
+
+        menuButton.setPosition(centerX - 270, buttonY);
+        menuButtonText.setPosition(centerX - 240, buttonY + 10);
+
+        restartButton.setPosition(centerX + 20, buttonY);
+        restartButtonText.setPosition(centerX + 70, buttonY + 10);
+    }
+
+    void draw(sf::RenderWindow& window) {
+        if (!visible) return;
+        window.draw(background);
+        window.draw(message);
+        window.draw(menuButton);
+        window.draw(menuButtonText);
+        window.draw(restartButton);
+        window.draw(restartButtonText);
+    }
+
+    bool isMenuButtonClicked(sf::Vector2i mousePos) {
+        return visible && menuButton.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
+    }
+
+    bool isRestartButtonClicked(sf::Vector2i mousePos) {
+        return visible && restartButton.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
+    }
+};
 
 int getTextureIndex(int piece) {
     switch (abs(piece)) {
@@ -69,11 +208,13 @@ int getTextureIndex(int piece) {
 }
 
 std::string toChessNotation(int x, int y) {
-    return std::string(1, 'a' + x) + std::string(1, '8' - y);
+    char file = 'a' + x;
+    char rank = '8' - y;
+    return std::string(1, file) + std::string(1, rank);
 }
 
 bool isValidCoordinate(int x, int y) {
-    return (x >= 0 && x < 8 && y >= 0 && y < 8);
+    return x >= 0 && x < 8 && y >= 0 && y < 8;
 }
 
 struct PieceSprite {
@@ -97,7 +238,7 @@ void updatePieceSprites(PieceSprite pieces[], int& pieceCount, int boardLayout[8
 
             int type = getTextureIndex(piece);
             int color = piece > 0 ? 1 : 0;
-            ps.sprite.setTextureRect({ type * TILE_SIZE, color * TILE_SIZE, TILE_SIZE, TILE_SIZE });
+            ps.sprite.setTextureRect(sf::IntRect(type * TILE_SIZE, color * TILE_SIZE, TILE_SIZE, TILE_SIZE));
             ps.sprite.setOrigin(TILE_SIZE / 2.f, TILE_SIZE / 2.f);
             ps.sprite.setPosition(
                 BOARD_POSITION.x + x * TILE_SIZE + TILE_SIZE / 2.f,
@@ -118,7 +259,8 @@ int findPieceIndex(PieceSprite pieces[], int pieceCount, int x, int y) {
     return -1;
 }
 
-bool applyMove(int layout[8][8], const std::string& move, GameSounds& sounds) {
+bool applyMove(int layout[8][8], const std::string& move, PieceSprite pieces[], int& pieceCount,
+    sf::Texture& pieceTex, PromotionWindow& promoWindow, GameSounds& sounds) {
     if (move.length() < 4) return false;
 
     int fromX = move[0] - 'a';
@@ -129,88 +271,100 @@ bool applyMove(int layout[8][8], const std::string& move, GameSounds& sounds) {
     if (!isValidCoordinate(fromX, fromY) || !isValidCoordinate(toX, toY))
         return false;
 
-    bool isCapture = (layout[toY][toX] != 0);
-    layout[toY][toX] = layout[fromY][fromX];
-    layout[fromY][fromX] = 0;
+    int piece = layout[fromY][fromX];
+    int capturedPiece = layout[toY][toX];
+    bool isCapture = (capturedPiece != 0);
 
-    // Play appropriate sound
-    if (isCapture) {
-        sounds.captureSound.play();
+    if (abs(piece) == 6 && abs(fromX - toX) == 2) {
+        bool isKingside = (toX > fromX);
+        int rookFromX = isKingside ? 7 : 0;
+        int rookToX = isKingside ? 5 : 3;
+
+        layout[fromY][rookToX] = layout[fromY][rookFromX];
+        layout[fromY][rookFromX] = 0;
+        updatePieceSprites(pieces, pieceCount, layout, pieceTex);
+    }
+    else if (abs(piece) == 1 && (toY == 0 || toY == 7)) {
+        promoWindow.setPosition(BOARD_POSITION.x + toX * TILE_SIZE + TILE_SIZE / 2,
+            BOARD_POSITION.y + toY * TILE_SIZE + TILE_SIZE / 2,
+            piece > 0);
+        promoWindow.visible = true;
+        promoWindow.promotionPos = sf::Vector2i(toX, toY);
     }
     else {
-        sounds.moveSound.play();
+        if (isCapture) sounds.captureSound.play();
+        else sounds.moveSound.play();
+    }
+
+    layout[toY][toX] = piece;
+    layout[fromY][fromX] = 0;
+
+    if (!promoWindow.visible) {
+        updatePieceSprites(pieces, pieceCount, layout, pieceTex);
     }
 
     return true;
 }
 
+bool checkForMate(ChessEngine& engine, const std::string& moveHistory, bool whiteToMove) {
+    engine.SendCommand("position startpos moves " + moveHistory);
+    engine.SendCommand("go depth 1");
+    std::string response = engine.GetResponse(5000);
+    return response.find("mate 0") != std::string::npos || response.find("stalemate") != std::string::npos;
+}
+
+void logGameResult(bool isWhiteWinner) {
+    std::ofstream logFile(LOG_FILENAME, std::ios::app);
+    if (!logFile.is_open()) {
+        std::cerr << "Error: Could not open log file!" << std::endl;
+        return;
+    }
+
+    static int gameNumber = 0;
+    std::ifstream inFile(LOG_FILENAME);
+    std::string line;
+    while (std::getline(inFile, line)) gameNumber++;
+
+    logFile << gameNumber + 1 << ". " << (isWhiteWinner ? "White wins" : "Black wins") << "\n";
+}
+
 void makeBotMove(ChessEngine& engine, int layout[8][8], std::string& moveHistory,
     PieceSprite pieces[], int& pieceCount, sf::Texture& pieceTex,
-    const ChessGameSettings& settings, GameSounds& sounds) {
-    std::cout << "Requesting bot move..." << std::endl;
+    const ChessGameSettings& settings, bool& gameOver, PromotionWindow& promoWindow,
+    GameSounds& sounds, GameOverScreen& gameOverScreen, int difficulty) {
+
     engine.SendCommand("go depth " + std::to_string(settings.engineDepth));
     std::string botResponse = engine.GetResponse(10000);
-    std::cout << "Raw bot response: " << botResponse << std::endl;
 
     size_t bestMovePos = botResponse.find("bestmove ");
     if (bestMovePos != std::string::npos) {
         std::string botMove = botResponse.substr(bestMovePos + 9, 4);
-        std::cout << "Parsed bot move: " << botMove << std::endl;
 
-        if (applyMove(layout, botMove, sounds)) {
+        if (applyMove(layout, botMove, pieces, pieceCount, pieceTex, promoWindow, sounds)) {
             moveHistory += (moveHistory.empty() ? "" : " ") + botMove;
+
+            int toY = 7 - (botMove[3] - '1');
+            int toX = botMove[2] - 'a';
+            int piece = layout[toY][toX];
+            bool isPawnPromotion = (abs(piece) == 1) && (toY == 0 || toY == 7);
+
+            if (isPawnPromotion) {
+                layout[toY][toX] = (piece > 0) ? 5 : -5;
+            }
+
             updatePieceSprites(pieces, pieceCount, layout, pieceTex);
-            std::cout << "Bot move applied successfully" << std::endl;
-        }
-        else {
-            std::cerr << "Failed to apply bot move!" << std::endl;
-        }
-    }
-    else {
-        std::cerr << "No valid move found in response!" << std::endl;
-    }
-}
 
-void showGameResult(sf::RenderWindow& window, const std::string& result, const std::string& moves) {
-    writeGameHistory(result, moves);
-
-    sf::Font font;
-    if (!font.loadFromFile("image/arial.ttf")) {
-        std::cerr << "Failed to load font for result display\n";
-        return;
-    }
-
-    sf::Text resultText(result, font, 50);
-    resultText.setFillColor(sf::Color::White);
-    resultText.setPosition(400, 300);
-
-    sf::Text hintText("Press ESC to continue", font, 20);
-    hintText.setFillColor(sf::Color(200, 200, 200));
-    hintText.setPosition(450, 400);
-
-    while (window.isOpen()) {
-        sf::Event event;
-        while (window.pollEvent(event)) {
-            if (event.type == sf::Event::Closed ||
-                (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::Escape)) {
-                return;
+            if (checkForMate(engine, moveHistory, true)) {
+                gameOver = true;
+                gameOverScreen.visible = true;
+                gameOverScreen.setWinner(false);
+                logGameResult(false);
             }
         }
-
-        window.clear(sf::Color(30, 30, 30));
-        window.draw(resultText);
-        window.draw(hintText);
-        window.display();
     }
 }
 
 void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, int level) {
-    // Initialize sounds
-    GameSounds sounds;
-    if (!sounds.loadSounds()) {
-        std::cerr << "Some sound effects will be missing\n";
-    }
-
     ChessEngine engine;
     if (!engine.ConnectToEngine(L"stockfish.exe")) {
         std::cerr << "Failed to start Stockfish!\n";
@@ -218,7 +372,17 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
     }
     engine.setDifficulty(level);
 
-    // Initialize textures
+    GameSounds sounds;
+    if (!sounds.loadSounds()) {
+        std::cerr << "Some sounds will not be available\n";
+    }
+
+    sf::Font font;
+    if (!font.loadFromFile("image/arial.ttf")) {
+        std::cerr << "Failed to load font!\n";
+        return;
+    }
+
     sf::Texture boardTex, pieceTex, backTex;
     if (!boardTex.loadFromFile("PNGs/ChessBoard.png") ||
         !pieceTex.loadFromFile("PNGs/ChessPieces.png") ||
@@ -234,7 +398,9 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
     backButton.setScale(0.10f, 0.10f);
     backButton.setPosition(20, 20);
 
-    // Initial board setup
+    GameOverScreen gameOverScreen(font);
+    PromotionWindow promotionWindow(font, pieceTex);
+
     int layout[8][8] = {
         {-4, -2, -3, -5, -6, -3, -2, -4},
         {-1, -1, -1, -1, -1, -1, -1, -1},
@@ -247,12 +413,12 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
     };
 
     bool isWhiteTurn = true;
+    bool gameOver = false;
     std::string moveHistory;
     PieceSprite pieces[MAX_PIECES];
     int pieceCount = 0;
     updatePieceSprites(pieces, pieceCount, layout, pieceTex);
 
-    // Dragging variables
     int dragFromX = -1, dragFromY = -1;
     int dragPieceIndex = -1;
     bool dragging = false;
@@ -267,16 +433,63 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
                 window.close();
             }
 
-            // Handle back button
+            if (promotionWindow.visible && promotionWindow.handleEvent(event, window)) {
+                int promoX = promotionWindow.promotionPos.x;
+                int promoY = promotionWindow.promotionPos.y;
+                int color = (layout[promoY][promoX] > 0) ? 1 : -1;
+                layout[promoY][promoX] = promotionWindow.selectedPiece * color;
+                updatePieceSprites(pieces, pieceCount, layout, pieceTex);
+
+                isWhiteTurn = !isWhiteTurn;
+
+                if (!isWhiteTurn) {
+                    makeBotMove(engine, layout, moveHistory, pieces, pieceCount,
+                        pieceTex, settings, gameOver, promotionWindow, sounds,
+                        gameOverScreen, level);
+                    isWhiteTurn = true;
+                }
+                continue;
+            }
+
+            if (gameOverScreen.visible && event.type == sf::Event::MouseButtonPressed &&
+                event.mouseButton.button == sf::Mouse::Left) {
+                sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+
+                if (gameOverScreen.isMenuButtonClicked(mousePos)) {
+                    if (settings.backgroundMusic) settings.backgroundMusic->play();
+                    engine.SafeClose();
+                    return;
+                }
+                else if (gameOverScreen.isRestartButtonClicked(mousePos)) {
+                    gameOver = false;
+                    gameOverScreen.visible = false;
+
+                    int newLayout[8][8] = {
+                        {-4, -2, -3, -5, -6, -3, -2, -4},
+                        {-1, -1, -1, -1, -1, -1, -1, -1},
+                        { 0,  0,  0,  0,  0,  0,  0,  0},
+                        { 0,  0,  0,  0,  0,  0,  0,  0},
+                        { 0,  0,  0,  0,  0,  0,  0,  0},
+                        { 0,  0,  0,  0,  0,  0,  0,  0},
+                        { 1,  1,  1,  1,  1,  1,  1,  1},
+                        { 4,  2,  3,  5,  6,  3,  2,  4}
+                    };
+                    memcpy(layout, newLayout, sizeof(layout));
+
+                    isWhiteTurn = true;
+                    moveHistory.clear();
+                    updatePieceSprites(pieces, pieceCount, layout, pieceTex);
+                }
+            }
+
             sf::Vector2i mousePos = sf::Mouse::getPosition(window);
             bool nowHover = backButton.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y));
             if (nowHover != hoverBack) {
                 hoverBack = nowHover;
                 backButton.setScale(hoverBack ? 0.15f : 0.10f, hoverBack ? 0.15f : 0.10f);
-                if (hoverBack && settings.moveSound) settings.moveSound->play();
             }
 
-            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left) {
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left && !gameOver && !promotionWindow.visible) {
                 if (hoverBack) {
                     if (settings.backgroundMusic) settings.backgroundMusic->play();
                     engine.SafeClose();
@@ -307,88 +520,48 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
                 draggedSprite.setPosition(static_cast<float>(event.mouseMove.x), static_cast<float>(event.mouseMove.y));
             }
 
-            if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left && dragging) {
+            if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left && dragging && !gameOver) {
                 int toX = static_cast<int>((event.mouseButton.x - BOARD_POSITION.x) / TILE_SIZE);
                 int toY = static_cast<int>((event.mouseButton.y - BOARD_POSITION.y) / TILE_SIZE);
 
                 bool validMove = false;
                 if (isValidCoordinate(toX, toY)) {
                     std::string move = toChessNotation(dragFromX, dragFromY) + toChessNotation(toX, toY);
-                    std::cout << "Attempting move: " << move << std::endl;
 
                     if ((isWhiteTurn && layout[toY][toX] <= 0) || (!isWhiteTurn && layout[toY][toX] >= 0)) {
-                        int capturedPiece = layout[toY][toX];
-                        int movingPiece = layout[dragFromY][dragFromX];
+                        int tempLayout[8][8];
+                        memcpy(tempLayout, layout, sizeof(tempLayout));
 
-                        // Make temporary move
-                        layout[toY][toX] = movingPiece;
-                        layout[dragFromY][dragFromX] = 0;
+                        if (applyMove(tempLayout, move, pieces, pieceCount, pieceTex, promotionWindow, sounds)) {
+                            std::string newHistory = moveHistory.empty() ? move : moveHistory + " " + move;
+                            engine.SendCommand("position startpos moves " + newHistory);
+                            engine.SendCommand("isready");
+                            std::string response = engine.GetResponse(5000);
 
-                        // Validate with Stockfish
-                        std::string newHistory = moveHistory.empty() ? move : moveHistory + " " + move;
-                        engine.SendCommand("position startpos moves " + newHistory);
-                        engine.SendCommand("isready");
-                        std::string response = engine.GetResponse(5000);
+                            if (response.find("readyok") != std::string::npos) {
+                                memcpy(layout, tempLayout, sizeof(layout));
+                                moveHistory = newHistory;
+                                validMove = true;
 
-                        if (response.find("readyok") != std::string::npos) {
-                            // Play sound for the move
-                            if (capturedPiece != 0) {
-                                sounds.captureSound.play();
-                            }
-                            else {
-                                sounds.moveSound.play();
-                            }
+                                if (!promotionWindow.visible) {
+                                    isWhiteTurn = !isWhiteTurn;
+                                    updatePieceSprites(pieces, pieceCount, layout, pieceTex);
 
-                            moveHistory = newHistory;
-                            validMove = true;
-                            isWhiteTurn = !isWhiteTurn;
+                                    if (checkForMate(engine, moveHistory, !isWhiteTurn)) {
+                                        gameOver = true;
+                                        gameOverScreen.visible = true;
+                                        gameOverScreen.setWinner(!isWhiteTurn);
+                                        logGameResult(!isWhiteTurn);
+                                    }
 
-                            updatePieceSprites(pieces, pieceCount, layout, pieceTex);
-
-                            // Check for game end conditions
-                            engine.SendCommand("position startpos moves " + moveHistory);
-                            engine.SendCommand("go depth 1");
-                            std::string gameStateResponse = engine.GetResponse(1000);
-
-                            if (gameStateResponse.find("mate") != std::string::npos) {
-                                std::string winner = isWhiteTurn ? "Black" : "White";
-                                showGameResult(window, winner + " wins by checkmate!", moveHistory);
-                                engine.SafeClose();
-                                return;
-                            }
-                            else if (gameStateResponse.find("stalemate") != std::string::npos) {
-                                showGameResult(window, "Draw by stalemate!", moveHistory);
-                                engine.SafeClose();
-                                return;
-                            }
-
-                            // Bot move
-                            if (!isWhiteTurn) {
-                                makeBotMove(engine, layout, moveHistory, pieces, pieceCount, pieceTex, settings, sounds);
-                                isWhiteTurn = true;
-
-                                // Check again for game end after bot move
-                                engine.SendCommand("position startpos moves " + moveHistory);
-                                engine.SendCommand("go depth 1");
-                                gameStateResponse = engine.GetResponse(1000);
-
-                                if (gameStateResponse.find("mate") != std::string::npos) {
-                                    std::string winner = isWhiteTurn ? "Black" : "White";
-                                    showGameResult(window, winner + " wins by checkmate!", moveHistory);
-                                    engine.SafeClose();
-                                    return;
-                                }
-                                else if (gameStateResponse.find("stalemate") != std::string::npos) {
-                                    showGameResult(window, "Draw by stalemate!", moveHistory);
-                                    engine.SafeClose();
-                                    return;
+                                    if (!isWhiteTurn && !gameOver) {
+                                        makeBotMove(engine, layout, moveHistory, pieces, pieceCount,
+                                            pieceTex, settings, gameOver, promotionWindow, sounds,
+                                            gameOverScreen, level);
+                                        isWhiteTurn = true;
+                                    }
                                 }
                             }
-                        }
-                        else {
-                            // Revert if invalid
-                            layout[dragFromY][dragFromX] = movingPiece;
-                            layout[toY][toX] = capturedPiece;
                         }
                     }
                 }
@@ -401,14 +574,8 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
                 dragFromX = dragFromY = -1;
                 dragPieceIndex = -1;
             }
-
-            // Show history when H key is pressed
-            if (event.type == sf::Event::KeyPressed && event.key.code == sf::Keyboard::H) {
-                showGameResult(window, "Game History", moveHistory);
-            }
         }
 
-        // Rendering
         window.clear(sf::Color(50, 50, 50));
         window.draw(board);
 
@@ -423,6 +590,8 @@ void runChessGame(sf::RenderWindow& window, const ChessGameSettings& settings, i
         }
 
         window.draw(backButton);
+        gameOverScreen.draw(window);
+        promotionWindow.draw(window);
         window.display();
     }
 

@@ -16,11 +16,11 @@ void openSettings(sf::RenderWindow& window, sf::Music& music, sf::Sound& hoverSo
     const float soundY = 450.f;
 
 
-    sf::Text musicText("MUSIC", font, 50);
+    sf::Text musicText(L"Ã”«€ ¿", font, 50);
     musicText.setPosition(centerX - textOffset, musicY - 10.f); 
     musicText.setFillColor(sf::Color::White);
 
-    sf::Text soundText("SOUND", font, 50);
+    sf::Text soundText(L"«¬” »", font, 50);
     soundText.setPosition(centerX - textOffset, soundY - 10.f);
     soundText.setFillColor(sf::Color::White);
 

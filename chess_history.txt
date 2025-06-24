@@ -1,0 +1,6 @@
+Game #1 | Result: White wins by checkmate!
+Moves: e2e4 e7e5 f2f4 e5f4 g2g4 d8h4 e1e2 d7d5 e2d3 c8g4 d3d4 h4f2 d4c3
+
+Game #2 | Result: White wins by checkmate!
+Moves: e2e4 e7e5 e1e2 d7d5 e2f3 d8h4 f3e3
+

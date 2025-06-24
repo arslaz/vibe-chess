@@ -5,7 +5,7 @@ Button::Button() {
     hoverOverlay.setFillColor(sf::Color(255, 255, 255, 50));
 }
 
-void Button::setup(const sf::Font& font, const std::string& label,
+void Button::setup(const sf::Font& font, const std::wstring& label,
     sf::Vector2f position, sf::Vector2f size,
     sf::Sound* hoverSnd, sf::Sound* clickSnd) {
     shape.setSize(size);

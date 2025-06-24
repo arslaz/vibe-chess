@@ -13,7 +13,7 @@ private:
 
 public:
     Button();
-    void setup(const sf::Font& font, const std::string& label,
+    void setup(const sf::Font& font, const std::wstring& label,
         sf::Vector2f position, sf::Vector2f size,
         sf::Sound* hoverSnd, sf::Sound* clickSnd);
     void update(const sf::Vector2f& mousePos);

@@ -133,6 +133,7 @@
   <ItemGroup>
     <ClCompile Include="Button.cpp" />
     <ClCompile Include="chess_game.cpp" />
+    <ClCompile Include="History.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="menu.cpp" />
     <ClCompile Include="NewGame.cpp" />
@@ -156,6 +157,7 @@
     <ClInclude Include="Button.h" />
     <ClInclude Include="chess_game.h" />
     <ClInclude Include="engine.hpp" />
+    <ClInclude Include="History.h" />
     <ClInclude Include="menu.h" />
     <ClInclude Include="NewGame.h" />
     <ClInclude Include="settings.h" />
